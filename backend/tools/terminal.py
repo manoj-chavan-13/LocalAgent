@@ -19,9 +19,12 @@ class TerminalExecutionTool(BaseTool):
 
     async def execute(self, command: str, cwd: str = ".", **kwargs) -> ToolResult:
         if settings.REQUIRE_APPROVAL_FOR_TERMINAL:
-            # We would verify approval here.
+            from approval.manager import approval_manager
             logger.warning(f"Command execution pending approval: {command}")
-            pass
+            details = f"Execute command in {cwd}:\n\n> {command}"
+            approved = await approval_manager.wait_for_approval("execute_command", details)
+            if not approved:
+                return ToolResult(success=False, output="", error="User rejected the terminal command.")
 
         try:
             process = await asyncio.create_subprocess_shell(

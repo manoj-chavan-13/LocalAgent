@@ -20,11 +20,25 @@ export const apiClient = {
     async indexRepository(path: string) {
         const response = await fetch(`${API_BASE_URL}/repo/index`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ repository_path: path })
         });
+        return response.json();
+    },
+
+    async getPendingApprovals() {
+        const response = await fetch(`${API_BASE_URL}/approvals/pending`);
+        if (!response.ok) throw new Error('Failed to fetch pending approvals');
+        return response.json();
+    },
+
+    async resolveApproval(actionId: string, approved: boolean) {
+        const response = await fetch(`${API_BASE_URL}/approvals/${actionId}/resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ approved })
+        });
+        if (!response.ok) throw new Error('Failed to resolve approval');
         return response.json();
     }
 };

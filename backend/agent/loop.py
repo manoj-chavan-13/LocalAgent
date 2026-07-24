@@ -42,12 +42,40 @@ class AgentLoop:
 
             await self.memory.add_message("assistant", response)
             yield response + "\n"
+            messages.append({"role": "assistant", "content": response})
 
-            # Parse tool calls from response (mocked here, real implementation would parse JSON blocks)
-            # If no tools, break loop
-            if "{" not in response: # naive check
-                break
+            # Check for tool call signature (naive JSON extraction for simple prompt)
+            import json
+            import re
+            
+            # Look for JSON block in response
+            match = re.search(r"```json\s*(\{.*?\})\s*```", response, re.DOTALL)
+            if not match:
+                # Fallback to looking for generic curly braces
+                match = re.search(r"(\{.*?\})", response, re.DOTALL)
+
+            if not match:
+                break # No tool call found, end reasoning loop
                 
-            # If tools were parsed, execute them and append to messages as 'system' or 'tool'
-            # messages.append({"role": "user", "content": f"Tool Output: {result.output}"})
-            break # Break for now to avoid infinite loop in stub
+            try:
+                tool_call = json.loads(match.group(1))
+                tool_name = tool_call.get("tool")
+                kwargs = tool_call.get("parameters", {})
+                
+                tool = registry.get_tool(tool_name)
+                if not tool:
+                    messages.append({"role": "user", "content": f"Error: Tool '{tool_name}' not found."})
+                    continue
+                    
+                yield f"\n*[Executing Tool: {tool_name}]*\n"
+                result = await tool.execute(**kwargs)
+                
+                result_str = f"Tool output:\n{result.output}"
+                if not result.success:
+                    result_str = f"Tool failed:\n{result.error}"
+                    
+                messages.append({"role": "user", "content": result_str})
+                
+            except Exception as e:
+                logger.error(f"Failed to parse tool call: {e}")
+                messages.append({"role": "user", "content": f"Failed to parse your JSON tool call: {e}"})

@@ -40,11 +40,13 @@ class WriteFileTool(BaseTool):
     }
 
     async def execute(self, filepath: str, content: str, **kwargs) -> ToolResult:
-        # In a real scenario, this would intercept and check for Safe Mode Approval
         if settings.REQUIRE_APPROVAL_FOR_FILE_MODS:
+            from approval.manager import approval_manager
             logger.warning(f"Modification to {filepath} pending approval...")
-            # Here we would hook into the approval manager. For now, we simulate success.
-            # return ToolResult(success=False, output="", error="Requires explicit user approval.")
+            details = f"Write to file: {filepath}\n\nContent excerpt:\n{content[:200]}..."
+            approved = await approval_manager.wait_for_approval("write_file", details)
+            if not approved:
+                return ToolResult(success=False, output="", error="User rejected the file modification.")
 
         try:
             os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
