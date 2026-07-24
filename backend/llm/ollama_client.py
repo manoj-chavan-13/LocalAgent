@@ -13,6 +13,26 @@ class OllamaClient:
         self.base_url = settings.OLLAMA_BASE_URL
         self.model = settings.OLLAMA_MAIN_MODEL
 
+    def set_model(self, model_name: str):
+        """Dynamically set the model to be used."""
+        self.model = model_name
+
+    async def get_available_models(self) -> List[str]:
+        """Fetch all models currently installed in the local Ollama instance."""
+        url = f"{self.base_url}/api/tags"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return [m.get("name") for m in data.get("models", [])]
+                    else:
+                        logger.error(f"Failed to fetch models: {await response.text()}")
+                        return []
+        except Exception as e:
+            logger.error(f"Failed to connect to Ollama: {e}")
+            return []
+
     async def chat(self, messages: List[Dict[str, str]], stream: bool = False) -> Any:
         url = f"{self.base_url}/api/chat"
         payload = {
