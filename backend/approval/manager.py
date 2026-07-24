@@ -14,13 +14,7 @@ class ApprovalManager:
         console.print(f"\n[bold yellow]⚠️ AGENT ACTION PENDING APPROVAL ({action_type})[/bold yellow]")
         console.print(f"[dim]{details}[/dim]\n")
         
-        # questionary is synchronous but can be run asynchronously
-        import asyncio
-        loop = asyncio.get_event_loop()
-        
-        def ask():
-            return questionary.confirm("Allow this action?").ask()
-            
-        return await loop.run_in_executor(None, ask)
+        # questionary can be awaited directly
+        return await questionary.confirm("Allow this action?").ask_async()
 
 approval_manager = ApprovalManager()

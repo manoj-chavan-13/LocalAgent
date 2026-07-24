@@ -36,10 +36,10 @@ async def main():
         sys.exit(1)
         
     # 3. Model Selection
-    selected_model = questionary.select(
+    selected_model = await questionary.select(
         "Which model would you like to use?",
         choices=models
-    ).ask()
+    ).ask_async()
     
     if not selected_model:
         sys.exit(0)
@@ -58,7 +58,7 @@ async def main():
     
     while True:
         try:
-            user_input = questionary.text("You ❯").ask()
+            user_input = await questionary.text("You ❯").ask_async()
             if user_input is None or user_input.strip().lower() in ['exit', 'quit']:
                 break
             if not user_input.strip():
