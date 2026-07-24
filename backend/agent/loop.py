@@ -1,3 +1,5 @@
+import json
+import re
 from typing import AsyncGenerator
 from llm.ollama_client import ollama_client
 from planner.strategy import Planner
@@ -10,6 +12,7 @@ class AgentLoop:
 
     def __init__(self, session_id: str):
         self.memory = ConversationMemory(session_id)
+        self.max_iterations = 10
         
     def _get_system_prompt(self, active_plan: str = None) -> str:
         tools = registry.get_all_tools()
