@@ -10,52 +10,71 @@ class AgentLoop:
 
     def __init__(self, session_id: str):
         self.memory = ConversationMemory(session_id)
-        self.planner = Planner()
-        self.max_iterations = 5
-
-    async def run(self, user_request: str) -> AsyncGenerator[str, None]:
-        await self.memory.add_message("user", user_request)
         
-        # 1. Planning phase
-        # In a full implementation, we'd query ChromaDB for repo_context
-        repo_context = "Repo has a FastAPI backend and React frontend."
-        plan = await self.planner.generate_plan(user_request, repo_context)
+    def _get_system_prompt(self, active_plan: str = None) -> str:
+        tools = registry.get_all_tools()
+        tools_schema = []
+        for t in tools:
+            tools_schema.append({
+                "name": t.name,
+                "description": t.description,
+                "parameters": t.parameters
+            })
+            
+        sys_prompt = (
+            "You are an autonomous AI DevOps and Software Engineering Agent.\n"
+            "You run in a loop of Thought, Action, Observation, and Answer.\n\n"
+            "AVAILABLE TOOLS:\n"
+            f"{json.dumps(tools_schema, indent=2)}\n\n"
+            "RULES:\n"
+            "1. You MUST ALWAYS start with a <thought> block to analyze the current state.\n"
+            "2. If you need to take an action, output a single JSON block formatted exactly like this:\n"
+            "```json\n"
+            "{\n"
+            "  \"tool\": \"tool_name\",\n"
+            "  \"parameters\": {\"param1\": \"value1\"}\n"
+            "}\n"
+            "```\n"
+            "3. After outputting the JSON tool call, STOP generating text. Wait for the Observation.\n"
+            "4. If you have completed the task and no longer need tools, output a <thought> block explaining why, and then provide your final answer to the user in markdown format.\n"
+            "5. If you do not know how to proceed, use the 'search_codebase' tool to query context.\n"
+        )
+        if active_plan:
+            sys_prompt += f"\nACTIVE PLAN (Follow this step-by-step):\n{active_plan}\n"
+            
+        return sys_prompt
         
-        yield f"**Plan:**\n{plan}\n\n"
-        await self.memory.add_message("assistant", f"Plan generated:\n{plan}")
-
-        # 2. Execution Loop
-        history = await self.memory.get_history()
+    async def run(self, user_prompt: str, active_plan: str = None) -> AsyncGenerator[str, None]:
+        await self.memory.load_history()
+        await self.memory.add_message("user", user_prompt)
         
-        # Add system prompt with tools
-        tools_info = [f"{t.name}: {t.description}" for t in registry.get_all_tools()]
-        system_prompt = f"You are a DevOps Agent. You have these tools: {', '.join(tools_info)}. " \
-                        f"Reply with a tool call in JSON format if needed, or reply with the final answer."
+        system_prompt = self._get_system_prompt(active_plan)
         
-        messages = [{"role": "system", "content": system_prompt}] + history
-
         for i in range(self.max_iterations):
+            messages = [{"role": "system", "content": system_prompt}] + self.memory.get_messages()
+            
+            yield f"\n\n**[Iteration {i+1}/{self.max_iterations}] Reasoning...**\n"
+            
             response = await ollama_client.chat(messages, stream=False)
             if not response:
                 yield "Error communicating with LLM."
                 break
 
             await self.memory.add_message("assistant", response)
-            yield response + "\n"
-            messages.append({"role": "assistant", "content": response})
-
-            # Check for tool call signature (naive JSON extraction for simple prompt)
-            import json
-            import re
             
-            # Look for JSON block in response
+            # Print the thought process
+            thought_match = re.search(r"<thought>(.*?)</thought>", response, re.DOTALL)
+            if thought_match:
+                yield f"\n*Thought: {thought_match.group(1).strip()}*\n"
+            else:
+                yield f"\n{response}\n"
+
+            # Check for tool call signature
             match = re.search(r"```json\s*(\{.*?\})\s*```", response, re.DOTALL)
             if not match:
-                # Fallback to looking for generic curly braces
-                match = re.search(r"(\{.*?\})", response, re.DOTALL)
-
-            if not match:
-                break # No tool call found, end reasoning loop
+                # No JSON tool call, assume completion
+                yield "\nTask completed or no further tools required.\n"
+                break
                 
             try:
                 tool_call = json.loads(match.group(1))
@@ -64,18 +83,20 @@ class AgentLoop:
                 
                 tool = registry.get_tool(tool_name)
                 if not tool:
-                    messages.append({"role": "user", "content": f"Error: Tool '{tool_name}' not found."})
+                    err = f"Error: Tool '{tool_name}' not found."
+                    yield f"\n{err}\n"
+                    await self.memory.add_message("user", err)
                     continue
                     
                 yield f"\n*[Executing Tool: {tool_name}]*\n"
                 result = await tool.execute(**kwargs)
                 
-                result_str = f"Tool output:\n{result.output}"
+                result_str = f"Observation from {tool_name}:\n{result.output}"
                 if not result.success:
-                    result_str = f"Tool failed:\n{result.error}"
+                    result_str = f"Observation (ERROR) from {tool_name}:\n{result.error}"
                     
-                messages.append({"role": "user", "content": result_str})
+                await self.memory.add_message("user", result_str)
                 
             except Exception as e:
                 logger.error(f"Failed to parse tool call: {e}")
-                messages.append({"role": "user", "content": f"Failed to parse your JSON tool call: {e}"})
+                await self.memory.add_message("user", f"System Error parsing JSON tool call: {e}")

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Chat } from './components/Chat'
 import { ApprovalDialog } from './components/ApprovalDialog'
+import { Sidebar } from './components/Sidebar'
 import { apiClient } from './api/client'
 
 function App() {
@@ -32,22 +33,28 @@ function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-full items-center bg-gray-900 text-white pt-10">
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold text-blue-500 mb-2">Local AI DevOps Agent</h1>
-        <p className="text-gray-400">Connected to local Ollama & ChromaDB</p>
-      </div>
+    <div className="flex h-screen w-full bg-gray-900 text-white">
+      {/* Settings / Repo sidebar */}
+      <Sidebar />
       
-      <Chat />
+      {/* Main Chat Area */}
+      <div className="flex flex-col flex-1 items-center pt-10">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-blue-500 mb-2">Local AI DevOps Agent</h1>
+          <p className="text-gray-400">Autonomous ReAct Loop Enabled</p>
+        </div>
+        
+        <Chat />
 
-      {pendingApproval && (
-        <ApprovalDialog 
-          actionType={pendingApproval.type}
-          details={pendingApproval.details}
-          onApprove={() => handleResolve(true)}
-          onReject={() => handleResolve(false)}
-        />
-      )}
+        {pendingApproval && (
+          <ApprovalDialog 
+            actionType={pendingApproval.type}
+            details={pendingApproval.details}
+            onApprove={() => handleResolve(true)}
+            onReject={() => handleResolve(false)}
+          />
+        )}
+      </div>
     </div>
   )
 }
