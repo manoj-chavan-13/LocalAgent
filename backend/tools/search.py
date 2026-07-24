@@ -1,6 +1,7 @@
 from typing import Dict, Any
 from tools.base import BaseTool, ToolResult
-from vector_store.chroma_client import chroma_client
+from vector_store.chroma_client import chroma_db
+from embeddings.ollama_embed import embedder
 
 class SearchCodebaseTool(BaseTool):
     """Tool for semantically searching the codebase using ChromaDB vector representations."""
@@ -33,7 +34,11 @@ class SearchCodebaseTool(BaseTool):
 
     async def execute(self, query: str, n_results: int = 5, **kwargs) -> ToolResult:
         try:
-            results = chroma_client.search(query, n_results=n_results)
+            # Generate embedding for the query
+            query_embedding = await embedder.get_embeddings([query])
+            
+            # Search chroma
+            results = chroma_db.search(query_embedding[0], n_results=n_results)
             
             if not results or not results['documents'] or len(results['documents'][0]) == 0:
                 return ToolResult(success=True, output="No relevant code snippets found. Has the repository been indexed?")

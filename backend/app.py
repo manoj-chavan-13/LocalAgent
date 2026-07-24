@@ -7,7 +7,7 @@ from loguru import logger
 from config.settings import get_settings
 from config.logging import setup_logging
 from api.router import api_router
-from vector_store.chroma_client import chroma_client
+from vector_store.chroma_client import chroma_db
 from memory.mongodb_client import mongodb
 import tools  # Register tools
 
