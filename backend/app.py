@@ -8,7 +8,7 @@ from config.settings import get_settings
 from config.logging import setup_logging
 from api.router import api_router
 from vector_store.chroma_client import chroma_client
-from memory.mongodb_client import mongodb_client
+from memory.mongodb_client import mongodb
 import tools  # Register tools
 
 settings = get_settings()
@@ -18,9 +18,11 @@ async def lifespan(app: FastAPI):
     # Startup
     setup_logging()
     logger.info(f"Starting {settings.PROJECT_NAME}...")
+    await mongodb.connect()
     yield
     # Shutdown
     logger.info("Shutting down gracefully...")
+    await mongodb.close()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
