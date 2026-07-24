@@ -48,13 +48,13 @@ class AgentLoop:
         return sys_prompt
         
     async def run(self, user_prompt: str, active_plan: str = None) -> AsyncGenerator[str, None]:
-        await self.memory.load_history()
         await self.memory.add_message("user", user_prompt)
         
         system_prompt = self._get_system_prompt(active_plan)
         
         for i in range(self.max_iterations):
-            messages = [{"role": "system", "content": system_prompt}] + self.memory.get_messages()
+            history = await self.memory.get_history()
+            messages = [{"role": "system", "content": system_prompt}] + history
             
             yield f"\n\n**[Iteration {i+1}/{self.max_iterations}] Reasoning...**\n"
             
